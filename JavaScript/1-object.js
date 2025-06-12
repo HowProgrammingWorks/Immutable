@@ -19,7 +19,4 @@ const lucius = {
 };
 
 // Можна "заморозити" і фінальні об'єкти
-// Object.freeze(marcus);
-// Object.freeze(lucius);
-
 console.log({ marcus, lucius });
