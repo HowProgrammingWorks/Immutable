@@ -15,35 +15,26 @@ class Record {
     class Struct {
       static fields = Object.freeze(fields.slice());
       static mutable = isMutable;
-
-      // Приймаємо один об'єкт з іменованими аргументами
       static create(props) {
         for (const field of fields) {
           if (!Reflect.has(props, field)) {
             throw new Error(`Missing field: ${field}`);
           }
         }
-        
-        // Перевірка на зайві поля (опціонально)
         for (const key in props) {
             if (!fieldSet.has(key)) {
                 throw new Error(`Unexpected field: ${key}`);
             }
         }
 
-        // Створюємо об'єкт більш декларативно
         const obj = Object.fromEntries(
           fields.map(field => [field, props[field]])
         );
-
-        // Залишаємо вихідну логіку "заморозки"
         return isMutable ? Object.seal(obj) : Object.freeze(obj);
       }
     }
     return Struct;
   }
-
-  // Функція використання update має бути усвідомленим
   static update(instance, updates) {
     if (Object.isFrozen(instance)) {
       throw new Error('Cannot mutate immutable Record');
@@ -65,12 +56,8 @@ class Record {
 // Оновлений приклад використання
 
 const City = Record.immutable(['name']);
-// Зробимо User також імутабельним для кращої практики
 const User = Record.immutable(['id', 'name', 'city', 'email']); 
-
-// Створюємо екземпляри за допомогою іменованих полів — це набагато чистіше
 const rome = City.create({ name: 'Rome' });
-
 const marcus = User.create({
   id: 1,
   name: 'Marcus',
@@ -78,9 +65,7 @@ const marcus = User.create({
   email: 'marcus@metarhia.com'
 });
 
-// Замість мутації (update), створюємо нову версію об'єкта через fork
 const marcusUpdated = Record.fork(marcus, { name: 'Marcus Aurelius' });
-
 const lucius = Record.fork(marcusUpdated, { 
     name: 'Lucius Verus',
     email: 'lucius@metarhia.com'
@@ -88,7 +73,6 @@ const lucius = Record.fork(marcusUpdated, {
 
 console.log({ marcus, marcusUpdated, lucius });
 
-// Спроба оновити імутабельний об'єкт викличе помилку
 try {
     Record.update(marcus, { name: 'FAIL' });
 } catch (err) {
