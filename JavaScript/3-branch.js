@@ -1,23 +1,18 @@
 'use strict';
 
 class Record {
-
   static immutable(fields) {
     return Record.#build(fields, false);
   }
-
   static mutable(fields) {
     return Record.#build(fields, true);
   }
-
   static #build(fields, isMutable) {
     const fieldSet = new Set(fields);
-
     class Struct {
       static fields = Object.freeze(fields.slice());
       static mutable = isMutable;
 
-    
       // Приймаємо об'єкт з іменованими полями замість позиційних аргументів.
 
       static create(props) {
@@ -34,7 +29,6 @@ class Record {
             throw new Error(`Unexpected field: ${key}`);
           }
         }
-        
         return isMutable ? Object.seal(obj) : Object.freeze(obj);
       }
     }
@@ -42,6 +36,7 @@ class Record {
   }
 
   // Оновлює мутабельний екземпляр. Залишається без змін, логіка коректна.
+  
   static update(instance, updates) {
     if (Object.isFrozen(instance)) {
       throw new Error('Cannot mutate an immutable Record instance');
@@ -72,7 +67,6 @@ module.exports = { Record };
 // Приклад використання оптимізованого коду
 
 const User = Record.immutable(['id', 'name', 'email']);
-
 const user1 = User.create({
   id: 1,
   name: 'Marcus',
