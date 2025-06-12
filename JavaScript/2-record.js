@@ -10,24 +10,40 @@ class Record {
   }
 
   static #build(fields, isMutable) {
+    const fieldSet = new Set(fields);
+
     class Struct {
-      static fields = fields.slice();
+      static fields = Object.freeze(fields.slice());
       static mutable = isMutable;
 
-      static create(...values) {
-        if (fields.length !== values.length) {
-          throw new Error('Record arity mismatch');
+      // Приймаємо один об'єкт з іменованими аргументами
+      static create(props) {
+        for (const field of fields) {
+          if (!Reflect.has(props, field)) {
+            throw new Error(`Missing field: ${field}`);
+          }
         }
-        const obj = Object.create(null);
-        for (let i = 0; i < fields.length; i++) {
-          obj[fields[i]] = values[i];
+        
+        // Перевірка на зайві поля (опціонально)
+        for (const key in props) {
+            if (!fieldSet.has(key)) {
+                throw new Error(`Unexpected field: ${key}`);
+            }
         }
+
+        // Створюємо об'єкт більш декларативно
+        const obj = Object.fromEntries(
+          fields.map(field => [field, props[field]])
+        );
+
+        // Залишаємо вихідну логіку "заморозки"
         return isMutable ? Object.seal(obj) : Object.freeze(obj);
       }
     }
     return Struct;
   }
 
+  // Функція використання update має бути усвідомленим
   static update(instance, updates) {
     if (Object.isFrozen(instance)) {
       throw new Error('Cannot mutate immutable Record');
@@ -39,23 +55,42 @@ class Record {
     }
     return instance;
   }
-
+  
   static fork(instance, updates) {
-    const copy = Object.create(null);
-    for (const key of Object.keys(instance)) {
-      copy[key] = Reflect.has(updates, key) ? updates[key] : instance[key];
-    }
+    const copy = { ...instance, ...updates };
     return Object.isFrozen(instance) ? Object.freeze(copy) : Object.seal(copy);
   }
 }
 
-// Usage
+// Оновлений приклад використання
 
 const City = Record.immutable(['name']);
-const User = Record.mutable(['id', 'name', 'city', 'email']);
-const rome = City.create('Rome');
-const marcus = User.create(1, 'Marcus', rome, 'marcus@metarhia.com');
-Record.update(marcus, { name: 'Marcus Aurelius' });
-const lucius = Record.fork(marcus, { name: 'Lucius Verus' });
-Record.update(lucius, { email: 'lucius@metarhia.com' });
-console.log({ marcus, lucius });
+// Зробимо User також імутабельним для кращої практики
+const User = Record.immutable(['id', 'name', 'city', 'email']); 
+
+// Створюємо екземпляри за допомогою іменованих полів — це набагато чистіше
+const rome = City.create({ name: 'Rome' });
+
+const marcus = User.create({
+  id: 1,
+  name: 'Marcus',
+  city: rome,
+  email: 'marcus@metarhia.com'
+});
+
+// Замість мутації (update), створюємо нову версію об'єкта через fork
+const marcusUpdated = Record.fork(marcus, { name: 'Marcus Aurelius' });
+
+const lucius = Record.fork(marcusUpdated, { 
+    name: 'Lucius Verus',
+    email: 'lucius@metarhia.com'
+});
+
+console.log({ marcus, marcusUpdated, lucius });
+
+// Спроба оновити імутабельний об'єкт викличе помилку
+try {
+    Record.update(marcus, { name: 'FAIL' });
+} catch (err) {
+    console.error('\nError trying to update immutable record:', err.message);
+}
