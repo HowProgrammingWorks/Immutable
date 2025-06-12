@@ -24,16 +24,12 @@ function validateTypes(props, defaults) {
 
 
 class Record {
-
-
   static immutable(defaults) {
     return Record.#build(defaults, false);
   }
-
   static mutable(defaults) {
     return Record.#build(defaults, true);
   }
-
   static #build(defaults, isMutable) {
     // Заморожуємо структуру "класу", щоб уникнути її випадкової зміни
     const fields = Object.keys(defaults);
