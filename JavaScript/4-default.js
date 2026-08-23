@@ -1,113 +1,97 @@
 'use strict';
 
-class Record {
-  static immutable(defaults) {
-    return Record.#build(defaults, false);
-  }
+function getType(value) {
+  if (Array.isArray(value)) return 'array';
+  if (value === null) return 'null';
+  return typeof value;
+}
 
-  static mutable(defaults) {
-    return Record.#build(defaults, true);
-  }
-
-  static #build(defaults, isMutable) {
-    const fields = Object.keys(defaults);
-    const defaultValues = Object.create(null);
-    for (const key of fields) {
-      defaultValues[key] = defaults[key];
-    }
-
-    class Struct {
-      static fields = fields;
-      static defaults = defaultValues;
-      static mutable = isMutable;
-
-      static create(data = {}) {
-        const obj = Object.create(null);
-
-        for (const key of fields) {
-          const base = defaultValues[key];
-          const value = key in data ? data[key] : base;
-
-          if (!Record.#sameType(base, value)) {
-            const exp = Record.#typeof(base);
-            const act = Record.#typeof(value);
-            throw new TypeError(
-              `Invalid type for "${key}": expected ${exp}, got ${act}`,
-            );
-          }
-
-          obj[key] = value;
-        }
-
-        return isMutable ? Object.seal(obj) : Object.freeze(obj);
-      }
-    }
-
-    return Struct;
-  }
-
-  static #typeof(value) {
-    if (Array.isArray(value)) return 'array';
-    if (value === null) return 'null';
-    return typeof value;
-  }
-
-  static #sameType(a, b) {
-    if (Array.isArray(a)) return Array.isArray(b);
-    if (a === null) return b === null;
-    return typeof a === typeof b;
-  }
-
-  static #validate(instance, updates) {
-    for (const key of Object.keys(updates)) {
-      if (!Reflect.has(instance, key)) continue;
-      const current = instance[key];
-      const next = updates[key];
-      if (!Record.#sameType(current, next)) {
-        const exp = Record.#typeof(current);
-        const act = Record.#typeof(next);
+function validateTypes(props, defaults) {
+  for (const key in props) {
+    if (Reflect.has(defaults, key)) {
+      const defaultValue = defaults[key];
+      const newValue = props[key];
+      const expectedType = getType(defaultValue);
+      const actualType = getType(newValue);
+      if (expectedType !== actualType) {
         throw new TypeError(
-          `Invalid type for "${key}": expected ${exp}, got ${act}`,
+          `Invalid type for "${key}": expected ${expectedType}, got ${actualType}`
         );
       }
     }
   }
+}
+
+
+class Record {
+  static immutable(defaults) {
+    return Record.#build(defaults, false);
+  }
+  static mutable(defaults) {
+    return Record.#build(defaults, true);
+  }
+  static #build(defaults, isMutable) {
+    // Заморожуємо структуру "класу", щоб уникнути її випадкової зміни
+    const fields = Object.keys(defaults);
+    const frozenDefaults = Object.freeze({ ...defaults });
+
+    class Struct {
+      static fields = Object.freeze(fields);
+      static defaults = frozenDefaults;
+      static mutable = isMutable;
+      static create(data = {}) {
+        validateTypes(data, frozenDefaults);
+        
+        // Створюємо екземпляр декларативно, поєднуючи `defaults` і `data`
+        const newInstance = { ...frozenDefaults, ...data };
+        return isMutable ? Object.seal(newInstance) : Object.freeze(newInstance);
+      }
+    }
+    return Struct;
+  }
 
   static update(instance, updates) {
     if (Object.isFrozen(instance)) {
-      throw new Error('Cannot mutate immutable Record');
+      throw new Error('Cannot mutate an immutable Record');
     }
-    Record.#validate(instance, updates);
-    for (const key of Object.keys(updates)) {
-      if (Reflect.has(instance, key)) {
-        instance[key] = updates[key];
-      }
-    }
+    validateTypes(updates, instance);
+    Object.assign(instance, updates);
     return instance;
   }
 
   static fork(instance, updates) {
-    Record.#validate(instance, updates);
-    const obj = Object.create(null);
-    for (const key of Object.keys(instance)) {
-      obj[key] = Reflect.has(updates, key) ? updates[key] : instance[key];
-    }
-    return Object.isFrozen(instance) ? Object.freeze(obj) : Object.seal(obj);
+    validateTypes(updates, instance);
+    const newInstance = { ...instance, ...updates };
+    return Object.isFrozen(instance) 
+      ? Object.freeze(newInstance) 
+      : Object.seal(newInstance);
   }
-
-  static branch(instance, updates) {
-    Record.#validate(instance, updates);
-    const obj = Object.create(instance);
-    for (const key of Object.keys(updates)) {
-      Reflect.defineProperty(obj, key, {
-        value: updates[key],
-        writable: true,
-        configurable: true,
-        enumerable: true,
-      });
-    }
-    return Object.isFrozen(instance) ? Object.freeze(obj) : Object.seal(obj);
-  }
+  
+   // Метод `branch` видалено.
 }
 
 module.exports = { Record };
+
+// Приклад використання оптимізованого коду
+
+const User = Record.immutable({
+  id: 0,
+  name: 'Guest',
+  email: null,
+  roles: ['guest'],
+});
+
+const user1 = User.create({
+  id: 1,
+  name: 'Marcus',
+});
+
+console.log('User 1 (defaults applied):', user1);
+const user2 = Record.fork(user1, { email: 'marcus@rome.com' });
+console.log('User 2 (forked):', user2);
+console.log('User 1 (remains unchanged):', user1);
+try {
+  User.create({ id: 2, name: 'Lucius', roles: 'admin' }); // roles має бути масивом
+} catch (e) {
+  console.error('\nSuccessfully caught type error:', e.message);
+}
